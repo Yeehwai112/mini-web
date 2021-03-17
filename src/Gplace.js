@@ -5,6 +5,8 @@ import * as UserActions from './actions/user'
 import TextField from '@material-ui/core/TextField';
 import { withScriptjs, withGoogleMap, GoogleMap } from "react-google-maps";
 import { compose, withProps, lifecycle } from "recompose";
+import Script from 'react-load-script';
+
 
 const GOOGLE_MAP_API_KEY = 'AIzaSyDWABjiUb5VF5IT9X3Z8Q6pRQgHvsiORLM';
 
@@ -25,7 +27,7 @@ const MyMapComponent = compose(
         }
     })
 )(props =>
-    <GoogleMap zoom={15} center={props.center} onClick={(e) => props.onClick(e)} onDragEnd={props.onMapDrag} />
+    <GoogleMap zoom={15} center={props.center} onDragEnd={props.onMapDrag} />
 );
 
 class Place extends Component {
@@ -34,33 +36,58 @@ class Place extends Component {
 
         this.state = {
             tempArray: [], 
-            placeInputRef: null,
             center: {
                 lat: 3.22,
                 lng: 101.89
             },
+            query: ''
         }
     }
 
-    componentDidMount() {
-        this.initPlaceAPI();
+    handleScriptLoad = () => {
+        // Declare Options For Autocomplete
+        const options = {
+            types: ['(cities)'],
+        };
+
+        // Initialize Google Autocomplete
+        /*global google*/ // To disable any eslint 'google not defined' errors
+        this.autocomplete = new google.maps.places.Autocomplete(
+            document.getElementById('autocomplete'),
+            options,
+        );
+
+        // Avoid paying for data that you don't need by restricting the set of
+        // place fields that are returned to just the address components and formatted
+        // address.
+        this.autocomplete.setFields(['address_components', 'formatted_address']);
+
+        // Fire Event when a suggested name is selected
+        this.autocomplete.addListener('place_changed', this.handleInput);
     }
 
-    // initialize the google place autocomplete
-    initPlaceAPI = () => {
-        const { placeInputRef } = this.state
-        let autocomplete = new window.google.maps.places.Autocomplete(placeInputRef);
-        new window.google.maps.event.addListener(autocomplete, "place_changed", function () {
-            let place = autocomplete.getPlace();
-            this.setState ({
-                address: place.formatted_address,
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng()
-            });
-        });
-    };
+    handleInput = () => {
+        // Extract City From Address Object
+        const addressObject = this.autocomplete.getPlace();
+        const address = addressObject.address_components;
 
-    handleInput(target) {
+        // Check if address is valid
+        if (address) {
+            // Set State
+            this.setState({
+                query: addressObject.formatted_address
+            }, () => {
+                //push in term of array
+                this.state.tempArray.push(addressObject.formatted_address)
+                //update to the store for the list of search
+                this.props.updateSearch(this.state.tempArray)
+            
+            })
+        }
+    }
+
+    // for testing insert store
+    handleInputChange(target) {
         const name = target.name
         const value = target.value
 
@@ -75,14 +102,24 @@ class Place extends Component {
     }
 
     render() {
-        const { center } = this.state
+        const { center,query } = this.state
         return (
             <div className="placePage">
+                <Script
+                    url={`https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAP_API_KEY}&libraries=places`}
+                    onLoad={this.handleScriptLoad}
+                />
                 <div className="textCont">
                     <TextField
-                        id="place"
+                        id="autocomplete"
                         label="Place"
                         autoComplete="place"
+                        value={query}
+                    />
+                    <TextField
+                        id="test"
+                        label="Test"
+                        onChange={(e) => this.handleInputChange(e.target)}
                     />
                 </div>
                 <div className="mapCont">
